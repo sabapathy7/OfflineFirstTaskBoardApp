@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyDxjd1pC2wdq2y5WSRy5P7hGnjE0S0LJEQ</string>
+	<key>GCM_SENDER_ID</key>
+	<string>297578180049</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.sabadev.OfflineFirstTaskBoard</string>
+	<key>PROJECT_ID</key>
+	<string>offlinetaskdrmarrow</string>
+	<key>STORAGE_BUCKET</key>
+	<string>offlinetaskdrmarrow.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:297578180049:ios:4a9cf11840adf6e64304f0</string>
+</dict>
+</plist>
