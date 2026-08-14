@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct TaskItem: Equatable, Sendable, Identifiable {
+nonisolated struct TaskItem: Equatable, Sendable, Identifiable {
     let id: UUID
     var title: String
     var taskDescription: String

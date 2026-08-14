@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum TaskStatus: Sendable {
+nonisolated enum TaskStatus: Sendable, Equatable {
     case todo
     case inProgress
     case done

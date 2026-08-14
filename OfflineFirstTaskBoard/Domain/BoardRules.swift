@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum BoardRules {
+nonisolated enum BoardRules: Sendable {
     static func appendingSortOrder(in column: [TaskItem]) -> Int {
         column.filter { !$0.isDeleted }.count
     }
@@ -62,14 +62,11 @@ enum BoardRules {
     }
 
     static func shouldApplyRemote(_ remote: TaskItem, over local: TaskItem?) -> Bool {
-        if local?.existsOnRemote == true {
-            return false
-        }
-        return true
+        local?.syncStatus != .pending
     }
 }
 
-enum DeleteDecision: Equatable, Sendable {
+nonisolated enum DeleteDecision: Equatable, Sendable {
     case dropLocally
     case markDeleted
 }

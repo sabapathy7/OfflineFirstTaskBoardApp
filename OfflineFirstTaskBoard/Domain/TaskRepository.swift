@@ -5,6 +5,6 @@
 //  Created by Kanagasabapathy on 14.08.26.
 //
 
-protocol TaskRepository: Sendable {
+nonisolated protocol TaskRepository: Sendable {
 
 }
