@@ -7,7 +7,7 @@
 
 import Foundation
 
-nonisolated enum SyncStatus: Equatable, Sendable {
+nonisolated enum SyncStatus: String, Equatable, Sendable {
     case pending
     case synced
     case failed
