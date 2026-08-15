@@ -9,13 +9,10 @@ import Foundation
 import FirebaseFirestore
 
 nonisolated enum FirebaseTaskAPIError: Error, Sendable {
-    case forcedOffline
     case invalidDocument
 }
 
 nonisolated final class FirebaseTaskAPI: TaskAPI, @unchecked Sendable {
-    var isForcedOffline = false
-
     private let collection: CollectionReference
 
     init(db: Firestore = Firestore.firestore()) {
@@ -23,12 +20,6 @@ nonisolated final class FirebaseTaskAPI: TaskAPI, @unchecked Sendable {
         settings.cacheSettings = MemoryCacheSettings()
         db.settings = settings
         collection = db.collection("boards").document("demo").collection("tasks")
-    }
-
-    private func checkOnline() throws {
-        if isForcedOffline {
-            throw FirebaseTaskAPIError.forcedOffline
-        }
     }
 
     private static func data(from task: TaskItem) -> [String: Any] {
@@ -61,7 +52,7 @@ nonisolated final class FirebaseTaskAPI: TaskAPI, @unchecked Sendable {
                         status: status,
                         createdAt: created,
                         updatedAt: updated,
-                        sortOrder: data["sortOrder"] as? Int ?? 0,
+                        sortOrder: (data["sortOrder"] as? NSNumber)?.intValue ?? 0,
                         syncStatus: .synced,
                         isDeleted: false,
                         existsOnRemote: true)
@@ -69,23 +60,19 @@ nonisolated final class FirebaseTaskAPI: TaskAPI, @unchecked Sendable {
     }
 
     func fetchAll() async throws -> [TaskItem] {
-        try checkOnline()
-        let snapshot = try await collection.getDocuments()
+        let snapshot = try await collection.getDocuments(source: .server)
         return try snapshot.documents.map(Self.task)
     }
     
     func create(_ task: TaskItem) async throws {
-        try checkOnline()
         try await collection.document(task.id.uuidString).setData(Self.data(from: task))
     }
     
     func update(_ task: TaskItem) async throws {
-        try checkOnline()
         try await collection.document(task.id.uuidString).setData(Self.data(from: task))
     }
     
     func delete(id: UUID) async throws {
-        try checkOnline()
         try await collection.document(id.uuidString).delete()
     }
 }
