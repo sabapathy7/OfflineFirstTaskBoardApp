@@ -8,10 +8,15 @@
 
 import SwiftUI
 import CoreData
+import FirebaseCore
 
 @main
 struct OfflineFirstTaskBoardApp: App {
     let persistenceController = PersistenceController.shared
+
+    init() {
+        FirebaseApp.configure()
+    }
 
     var body: some Scene {
         WindowGroup {
