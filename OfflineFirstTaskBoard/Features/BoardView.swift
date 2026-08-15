@@ -33,7 +33,8 @@ struct BoardView: View {
             VStack(spacing: 0) {
                 SyncBanner(
                     title: viewModel.banner.isEmpty ? "Sync Now" : viewModel.banner,
-                    isFailed: viewModel.banner == "Sync failed"
+                    isFailed: viewModel.banner == "Sync failed",
+                    isOffline: viewModel.banner == "Offline"
                 ) {
                     Task { await viewModel.syncNow() }
                 }

@@ -7,17 +7,22 @@
 
 import Observation
 import Foundation
+import Network
 
 @Observable
 final class BoardViewModel {
     var tasks: [TaskItem] = []
     var banner: String = ""
     var isSyncing = false
+    var isOffline = false
 
     private let repository: TaskRepository
+    private let pathMonitor = NWPathMonitor()
+    private let pathQueue = DispatchQueue(label: "OfflineFirstTaskBoard.path")
 
     init(repository: TaskRepository) {
         self.repository = repository
+        startPathMonitor()
     }
 
     func tasks(in status: TaskStatus) -> [TaskItem] {
@@ -85,18 +90,41 @@ final class BoardViewModel {
     }
 
     func syncNow() async {
+        if isOffline {
+            banner = "Offline"
+            return
+        }
         guard !isSyncing else { return }
         isSyncing = true
         banner = "Syncing"
         do {
             try await repository.sync()
             tasks = try await repository.loadTasks()
-            banner = "Last synced"
+            banner = isOffline ? "Offline" : "Last synced"
         } catch {
             tasks = (try? await repository.loadTasks()) ?? tasks
-            banner = "Sync failed"
+            banner = isOffline ? "Offline" : "Sync failed"
         }
         isSyncing = false
+    }
+
+    private func startPathMonitor() {
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            let offline = path.status != .satisfied
+            Task { @MainActor in
+                self?.applyPath(offline: offline)
+            }
+        }
+        pathMonitor.start(queue: pathQueue)
+    }
+
+    private func applyPath(offline: Bool) {
+        isOffline = offline
+        if offline {
+            banner = "Offline"
+        } else if banner == "Offline" {
+            banner = ""
+        }
     }
 
     private func seed() async throws {
