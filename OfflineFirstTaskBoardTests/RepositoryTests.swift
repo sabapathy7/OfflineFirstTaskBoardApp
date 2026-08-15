@@ -157,4 +157,50 @@ struct RepositoryTests {
         #expect(local[0].syncStatus == .failed)
         #expect(local[0].existsOnRemote == false)
     }
+
+    @Test("synced delete then sync removes remote")
+    func syncPushesTombstone() async throws {
+        let repo = TaskRepositoryImpl(store: store, api: api)
+        var task = try await repo.create(title: "Gone", description: "", status: .todo)
+        task.existsOnRemote = true
+        task.syncStatus = .synced
+        try await store.upsert(task)
+        try await api.create(task)
+
+        try await repo.delete(task.id)
+        try await repo.sync()
+
+        #expect(try await api.fetchAll().isEmpty)
+        #expect(try await store.fetchTasks().isEmpty)
+    }
+
+    @Test("sync keeps pending local title over remote")
+    func syncKeepsPendingLocalTitle() async throws {
+        let id = UUID()
+        let remote = TaskItem(
+            id: id,
+            title: "Remote",
+            taskDescription: "",
+            status: .todo,
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 0),
+            sortOrder: 0,
+            syncStatus: .synced,
+            isDeleted: false,
+            existsOnRemote: true
+        )
+        try await api.create(remote)
+
+        var local = remote
+        local.title = "Local"
+        local.syncStatus = .pending
+        try await store.upsert(local)
+
+        let repo = TaskRepositoryImpl(store: store, api: api)
+        try await repo.sync()
+
+        let rows = try await store.fetchTasks()
+        #expect(rows[0].title == "Local")
+        #expect(try await api.fetchAll()[0].title == "Local")
+    }
 }

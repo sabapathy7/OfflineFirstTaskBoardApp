@@ -127,4 +127,12 @@ struct BoardRulesTests {
         let remote = makeTask()
         #expect(BoardRules.shouldApplyRemote(remote, over: local))
     }
+
+    @Test("pull does not overwrite local failed")
+    func pullSkipsLocalFailed() {
+        var local = makeTask()
+        local.syncStatus = .failed
+        let remote = makeTask()
+        #expect(BoardRules.shouldApplyRemote(remote, over: local) == false)
+    }
 }
