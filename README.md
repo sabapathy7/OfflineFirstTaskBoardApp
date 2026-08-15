@@ -60,6 +60,33 @@ Last-write-wins, **dirty local wins**: pull does not overwrite `.pending` or `.f
 
 **Two simulators:** Sync on A. On B, **delete the app** (wipe Core Data only), then ⌘R. Empty local hydrates from Firestore. Delete on A + sync; pull on B removes the card. Edit a title on B (pending) + sync; A’s pull keeps B’s title.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="https://github.com/user-attachments/assets/c16eaadd-6da9-409d-92a3-ed1c2d50c50c" width="160" alt="Board with To Do selected and Last synced"><br>
+      Board + sync banner
+    </td>
+    <td align="center" valign="top">
+      <img src="https://github.com/user-attachments/assets/303147ca-ae47-428a-a020-76ea01374ef4" width="160" alt="To Do row swiped left showing Move and Delete"><br>
+      Swipe: Move / Delete
+    </td>
+    <td align="center" valign="top">
+      <img src="https://github.com/user-attachments/assets/0e3eecba-8545-413a-b039-420fa7f12dcf" width="160" alt="Board showing Offline banner"><br>
+      Airplane Mode → Offline
+    </td>
+    <td align="center" valign="top">
+      <img src="https://github.com/user-attachments/assets/b3961110-5867-480e-a8aa-f79b33f231ef" width="160" alt="New task editor"><br>
+      Add a task
+    </td>
+    <td align="center" valign="top">
+      <img src="https://github.com/user-attachments/assets/ecdf706f-1d35-4e09-b0dc-883d00afad8e" width="160" alt="In Progress column after sync"><br>
+      In Progress, Last synced
+    </td>
+  </tr>
+</table>
+
 ## Limitations
 
 - Shared demo board, no Auth, open rules.
