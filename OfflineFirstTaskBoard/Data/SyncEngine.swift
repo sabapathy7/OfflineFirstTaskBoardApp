@@ -65,6 +65,8 @@ actor SyncEngine {
         let local = try await store.fetchTasks()
         let localByID = Dictionary(uniqueKeysWithValues: local.map { ($0.id, $0)})
 
+        let remoteIDs = Set(remote.map(\.id))
+
         for var incoming in remote {
             let existing = localByID[incoming.id]
             guard BoardRules.shouldApplyRemote(incoming, over: existing) else { continue }
@@ -73,6 +75,12 @@ actor SyncEngine {
             try await store.upsert(incoming)
         }
 
+        for task in local {
+            guard task.syncStatus == .synced,
+                  task.existsOnRemote,
+                  !remoteIDs.contains(task.id) else { continue }
+            try await store.delete(id: task.id)
+        }
     }
 
 }

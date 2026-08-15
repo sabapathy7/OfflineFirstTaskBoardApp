@@ -78,7 +78,7 @@ actor TaskRepositoryImpl: TaskRepository {
     
     func move(id: UUID, to status: TaskStatus) async throws -> TaskItem {
         let existing = try await store.fetchTasks()
-        guard var task = existing.first(where: { $0.id == id && !$0.isDeleted }) else {
+        guard let task = existing.first(where: { $0.id == id && !$0.isDeleted }) else {
             throw TaskRepositoryError.notFound
         }
 
@@ -103,7 +103,7 @@ actor TaskRepositoryImpl: TaskRepository {
     
     func delete(_ taskId: UUID) async throws {
         let existing = try await store.fetchTasks()
-        guard var task = existing.first(where: { $0.id == taskId }) else {
+        guard let task = existing.first(where: { $0.id == taskId }) else {
             throw TaskRepositoryError.notFound
         }
 

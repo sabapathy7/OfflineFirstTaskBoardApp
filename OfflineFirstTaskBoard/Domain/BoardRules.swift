@@ -62,7 +62,12 @@ nonisolated enum BoardRules: Sendable {
     }
 
     static func shouldApplyRemote(_ remote: TaskItem, over local: TaskItem?) -> Bool {
-        local?.syncStatus != .pending
+        switch local?.syncStatus {
+        case .pending, .failed:
+            return false
+        case .synced, .none:
+            return true
+        }
     }
 }
 
