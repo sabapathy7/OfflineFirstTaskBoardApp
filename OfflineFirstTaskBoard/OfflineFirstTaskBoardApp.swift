@@ -24,7 +24,7 @@ struct OfflineFirstTaskBoardApp: App {
 
     var body: some Scene {
         WindowGroup {
-            BoardView(viewModel: BoardViewModel(repository: repository, api: api))
+            BoardView(viewModel: BoardViewModel(repository: repository))
         }
     }
 }

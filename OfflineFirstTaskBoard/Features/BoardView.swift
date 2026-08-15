@@ -22,6 +22,7 @@ private enum EditorRoute: Identifiable {
 struct BoardView: View {
     @State private var viewModel: BoardViewModel
     @State private var editor: EditorRoute?
+    @State private var selectedColumn = TaskStatus.todo
 
     init(viewModel: BoardViewModel) {
         _viewModel = State(initialValue: viewModel)
@@ -30,25 +31,27 @@ struct BoardView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                SyncBanner(title: viewModel.banner.isEmpty ? "Sync Now" : viewModel.banner) {
+                SyncBanner(
+                    title: viewModel.banner.isEmpty ? "Sync Now" : viewModel.banner,
+                    isFailed: viewModel.banner == "Sync failed"
+                ) {
                     Task { await viewModel.syncNow() }
                 }
 
-                TabView {
-                    column(.todo)
-                    column(.inProgress)
-                    column(.done)
+                Picker("Column", selection: $selectedColumn) {
+                    ForEach(TaskStatus.allCases, id: \.self) { status in
+                        Text(status.label).tag(status)
+                    }
                 }
-                .tabViewStyle(.page)
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                column(selectedColumn)
             }
             .navigationTitle("Board")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                #if DEBUG
-                ToolbarItem(placement: .topBarLeading) {
-                    Toggle("Offline", isOn: forceOffline)
-                }
-                #endif
-
                 ToolbarItem(placement: .topBarTrailing) {
                     EditButton()
                 }
@@ -63,13 +66,11 @@ struct BoardView: View {
                     if case .edit(let task) = route { return task }
                     return nil
                 }()) { title, detail, status in
-                    Task {
-                        switch route {
-                        case .create:
-                            await viewModel.create(title: title, description: detail, status: status)
-                        case .edit(let task):
-                            await viewModel.edit(task, title: title, description: detail, status: status)
-                        }
+                    switch route {
+                    case .create:
+                        await viewModel.create(title: title, description: detail, status: status)
+                    case .edit(let task):
+                        await viewModel.edit(task, title: title, description: detail, status: status)
                     }
                 }
             }
@@ -79,29 +80,37 @@ struct BoardView: View {
         }
     }
 
-    private var forceOffline: Binding<Bool> {
-        Binding(
-            get: { viewModel.api.isForcedOffline },
-            set: { viewModel.api.isForcedOffline = $0 }
-        )
-    }
-
     private func column(_ status: TaskStatus) -> some View {
         List {
             Section(status.label) {
                 ForEach(viewModel.tasks(in: status)) { task in
-                    TaskCard(
-                        task: task,
-                        onOpen: { editor = .edit(task) },
-                        onDelete: { Task { await viewModel.delete(task) } },
-                        onMoveNext: status.next.map { next in
-                            { Task { await viewModel.move(task, to: next) } }
-                        },
-                        onMoveBack: status.previous.map { previous in
-                            { Task { await viewModel.move(task, to: previous) } }
-                        },
-                        onRetry: { Task { await viewModel.syncNow() } }
-                    )
+                    Button {
+                        editor = .edit(task)
+                    } label: {
+                        TaskCard(task: task) {
+                            Task { await viewModel.syncNow() }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button("Delete", role: .destructive) {
+                            Task { await viewModel.delete(task) }
+                        }
+                        if let next = status.next {
+                            Button("Move") {
+                                Task { await viewModel.move(task, to: next) }
+                            }
+                            .tint(.blue)
+                        }
+                    }
+                    .swipeActions(edge: .leading) {
+                        if let previous = status.previous {
+                            Button("Back") {
+                                Task { await viewModel.move(task, to: previous) }
+                            }
+                            .tint(.indigo)
+                        }
+                    }
                 }
                 .onMove { source, dest in
                     Task { await viewModel.reorder(in: status, fromOffsets: source, toOffset: dest) }

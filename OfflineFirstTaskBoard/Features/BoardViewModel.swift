@@ -15,11 +15,9 @@ final class BoardViewModel {
     var isSyncing = false
 
     private let repository: TaskRepository
-    let api: FirebaseTaskAPI
 
-    init(repository: TaskRepository, api: FirebaseTaskAPI) {
+    init(repository: TaskRepository) {
         self.repository = repository
-        self.api = api
     }
 
     func tasks(in status: TaskStatus) -> [TaskItem] {
@@ -30,9 +28,9 @@ final class BoardViewModel {
         do {
             tasks = try await repository.loadTasks()
             if tasks.isEmpty { try await seed() }
-            banner = "Load synced - locally"
+            await syncNow()
         } catch {
-            banner = "Load failed - retry"
+            banner = "Sync failed"
         }
     }
 
@@ -40,32 +38,54 @@ final class BoardViewModel {
         do {
             _ = try await repository.create(title: title, description: description, status: status)
             tasks = try await repository.loadTasks()
+            await syncNow()
         } catch {
             banner = "Save failed"
         }
     }
 
     func edit(_ task: TaskItem, title: String, description: String, status: TaskStatus) async {
-        _ = try? await repository.edit(id: task.id, title: title, description: description, status: status)
-        tasks = (try? await repository.loadTasks()) ?? tasks
+        do {
+            _ = try await repository.edit(id: task.id, title: title, description: description, status: status)
+            tasks = try await repository.loadTasks()
+            await syncNow()
+        } catch {
+            banner = "Save failed"
+        }
     }
 
     func move(_ task: TaskItem, to status: TaskStatus) async {
-        _ = try? await repository.move(id: task.id, to: status)
-        tasks = (try? await repository.loadTasks()) ?? tasks
+        do {
+            _ = try await repository.move(id: task.id, to: status)
+            tasks = try await repository.loadTasks()
+            await syncNow()
+        } catch {
+            banner = "Save failed"
+        }
     }
 
     func reorder(in status: TaskStatus, fromOffsets: IndexSet, toOffset: Int) async {
-        _ = try? await repository.reorder(in: status, fromOffsets: fromOffsets, toOffset: toOffset)
-        tasks = (try? await repository.loadTasks()) ?? tasks
+        do {
+            _ = try await repository.reorder(in: status, fromOffsets: fromOffsets, toOffset: toOffset)
+            tasks = try await repository.loadTasks()
+            await syncNow()
+        } catch {
+            banner = "Save failed"
+        }
     }
 
     func delete(_ task: TaskItem) async {
-        _ = try? await repository.delete(task.id)
-        tasks = (try? await repository.loadTasks()) ?? tasks
+        do {
+            try await repository.delete(task.id)
+            tasks = try await repository.loadTasks()
+            await syncNow()
+        } catch {
+            banner = "Save failed"
+        }
     }
 
     func syncNow() async {
+        guard !isSyncing else { return }
         isSyncing = true
         banner = "Syncing"
         do {
@@ -73,7 +93,8 @@ final class BoardViewModel {
             tasks = try await repository.loadTasks()
             banner = "Last synced"
         } catch {
-            banner = "Sync failed - tap to retry"
+            tasks = (try? await repository.loadTasks()) ?? tasks
+            banner = "Sync failed"
         }
         isSyncing = false
     }
