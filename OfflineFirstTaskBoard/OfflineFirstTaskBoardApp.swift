@@ -7,21 +7,24 @@
 
 
 import SwiftUI
-import CoreData
 import FirebaseCore
 
 @main
 struct OfflineFirstTaskBoardApp: App {
-    let persistenceController = PersistenceController.shared
+    private let api: FirebaseTaskAPI
+    private let repository: TaskRepository
 
     init() {
         FirebaseApp.configure()
+        let api = FirebaseTaskAPI()
+        self.api = api
+        let store = CoreDataTaskStore(stack: PersistenceController.shared)
+        self.repository = TaskRepositoryImpl(store: store, api: api)
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(\.managedObjectContext, persistenceController.container.viewContext)
+            BoardView(viewModel: BoardViewModel(repository: repository, api: api))
         }
     }
 }
