@@ -36,12 +36,20 @@ actor MockTaskAPI: TaskAPI {
         if shouldFail {
             throw MockTaskAPIError.forcedFailure
         }
+        // Same last-write-wins guard as FirebaseTaskAPI: an older edit never
+        // overwrites a newer remote copy.
+        if let existing = storage[task.id], existing.updatedAt > task.updatedAt {
+            return
+        }
         storage[task.id] = task
     }
-    
-    func delete(id: UUID) async throws {
+
+    func delete(id: UUID, updatedAt: Date) async throws {
         if shouldFail {
             throw MockTaskAPIError.forcedFailure
+        }
+        if let existing = storage[id], existing.updatedAt > updatedAt {
+            return
         }
         storage.removeValue(forKey: id)
     }

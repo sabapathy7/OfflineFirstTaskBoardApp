@@ -16,6 +16,13 @@ actor SyncEngine {
         self.api = api
     }
 
+    /// Push then pull, last-write-wins by `updatedAt` on both sides:
+    /// - push: the API keeps the remote copy when it is newer (see `TaskAPI`),
+    ///   so pushing an older edit is a no-op instead of a clobber.
+    /// - pull: `BoardRules.shouldApplyRemote` applies a newer remote over any
+    ///   local row, which also repairs a device whose push lost the race.
+    /// Net effect: the final state is the latest edit, not the last device
+    /// that happened to sync.
     func sync() async throws {
         try await pushPending()
         try await pullRemote()
@@ -30,8 +37,10 @@ actor SyncEngine {
             do {
                 if task.isDeleted {
                     if task.existsOnRemote {
-                        try await api.delete(id: task.id)
+                        try await api.delete(id: task.id, updatedAt: task.updatedAt)
                     }
+                    // Drop the tombstone either way; if a newer remote edit
+                    // survived the guarded delete, the pull below restores it.
                     try await store.delete(id: task.id)
                     continue
                 }
@@ -45,10 +54,23 @@ actor SyncEngine {
                 var synced = task
                 synced.syncStatus = .synced
                 synced.existsOnRemote = true
+                synced.subtasks = synced.subtasks.map { item in
+                    var item = item
+                    item.syncStatus = .synced
+                    item.existsOnRemote = true
+                    return item
+                }
                 try await store.upsert(synced)
             } catch {
                 var failed = task
                 failed.syncStatus = .failed
+                failed.subtasks = failed.subtasks.map { item in
+                    var item = item
+                    if item.syncStatus == .pending {
+                        item.syncStatus = .failed
+                    }
+                    return item
+                }
                 try? await store.upsert(failed)
                 firstError = error
             }
