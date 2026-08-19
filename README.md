@@ -32,33 +32,52 @@ BoardView → BoardViewModel → TaskRepository
 
 **Local-first.** `create` / `edit` / `move` / `reorder` / `delete` write Core Data immediately. Delete: never-on-remote is dropped; already-on-remote is a tombstone (`.pending` + `isDeleted`). `loadTasks` returns local if anything is there; only an empty store hydrates from Firestore.
 
-**Sync.** `sync()` pushes `.pending` / `.failed`, then pulls. Pull skips dirty local rows. Synced locals missing on the server are deleted (remote tombstone). Tests inject `MockTaskAPI` + in-memory Core Data.
+**Sync.** `sync()` pushes `.pending` / `.failed`, then pulls. Both directions are last-write-wins on `updatedAt` (see Sync rules). Synced locals missing on the server are deleted (remote tombstone). Tests inject `MockTaskAPI` + in-memory Core Data.
 
 ## Firebase
 
-- Firestore implements `TaskAPI` only (`fetchAll` / `create` / `update` / `delete`).
+- Firestore implements `TaskAPI` only (`fetchAll` / `create` / `update` / `delete` / `remoteChanges`).
 - Path: `boards/demo/tasks/{id}`. No Auth. Open rules on that path so two simulators share one board (take-home only).
+- `update` and `delete` run in a **Firestore transaction**: the write is skipped when the server copy has a newer `updatedAt`. An older edit can never clobber a newer one, even if both devices sync at the same moment.
+- `remoteChanges` wraps a **snapshot listener** as an `AsyncStream<Void>`; `metadata.hasPendingWrites` filters out the echo of our own writes.
 - `MemoryCacheSettings` is on so Firestore’s disk cache does not become a second source of truth. The app owns the outbox; pull uses `getDocuments(source: .server)`.
 - `sortOrder` is read as `NSNumber` (Firestore’s type), not `Int`.
 
 ## Sync rules
 
-Last-write-wins, **dirty local wins**: pull does not overwrite `.pending` or `.failed`. After fetch, local rows that are synced, exist on remote, and are missing from Firestore are deleted (remote tombstone). Pending/failed rows stay.
+**Sync is automatic — there is no “Sync Now” step.** It runs:
 
-`NWPathMonitor` drives the **Offline** banner when the path is unsatisfied. A failed `TaskAPI` call still becomes **Sync failed** (and a red `!` on the card). Writes still succeed locally while offline.
+- after every local write (create / edit / move / reorder / delete / archive / restore / subtask change),
+- when a Firestore snapshot listener reports a change from another device (`TaskAPI.remoteChanges`),
+- when `NWPathMonitor` reports the network came back,
+- when the app returns to the foreground,
+- and once at launch. The banner stays tappable as a manual retry, nothing more.
+
+Requests that arrive while a sync is running are coalesced into one extra pass, so a remote change landing mid-sync is never dropped.
+
+**Conflicts are last-write-wins on `updatedAt`, in both directions:**
+
+- **Push**: `update` / `delete` are guarded server-side (Firestore transaction; mirrored in `MockTaskAPI`). Pushing an edit older than the server copy is a no-op instead of a clobber.
+- **Pull**: a newer remote wins over any local row; a `.pending` / `.failed` local row survives only while it is still the newest edit (`BoardRules.shouldApplyRemote`). The pull after each push also repairs the device whose edit lost.
+
+So when the same task is edited on two devices, both converge on the **latest edit** — which device synced first no longer matters (`ConflictResolutionTests` proves both orders). Deletes carry their tombstone time: a newer edit beats an older delete (the task comes back), a newer delete beats an older edit.
+
+A failed `TaskAPI` call still becomes **Sync failed** (and a red `!` on the card). Writes still succeed locally while offline.
 
 ## UI
 
 - Segmented **To Do / In Progress / Done** (not a paging swipe — that stole row swipes).
 - Swipe a **row** left to Move or Delete; swipe right to go Back. Not cross-column drag.
 - Tap a card to edit. Nav-bar **Edit** reorders inside one column.
-- Banner: Offline / Syncing / Last synced / Sync failed. Tap to sync. Orange ● = pending; red ! = failed (tap to retry).
+- Banner: Offline / Syncing / Last synced / Sync failed — **status, not a required control**; sync runs by itself. Tapping it is just a manual retry. Orange ● = pending; red ! = failed (tap to retry).
 
 ## Demo
 
-**One simulator:** ⌘R → seed cards (●) → wait for Last synced → add/move/delete → dots clear. Airplane Mode → add a card → Offline (or Sync failed) → network on → tap banner → Last synced. Confirm in Firestore: project `offlinetaskdrmarrow`, `boards/demo/tasks`.
+**One simulator:** ⌘R → seed cards (●) → Syncing → Last synced, all hands-off. Add/move/delete → the banner cycles by itself and dots clear. Airplane Mode → add a card → Offline → network on → syncs on its own → Last synced. Confirm in Firestore: project `offlinetaskdrmarrow`, `boards/demo/tasks`.
 
-**Two simulators:** Sync on A. On B, **delete the app** (wipe Core Data only), then ⌘R. Empty local hydrates from Firestore. Delete on A + sync; pull on B removes the card. Edit a title on B (pending) + sync; A’s pull keeps B’s title.
+**Two simulators (live propagation):** run A and B side by side. Add or move a card on A → it appears on B in about a second, no taps on B (snapshot listener → pull).
+
+**Conflict demo — the follow-up scenario:** put **both** simulators in Airplane Mode. Edit the *same task's* title on A, then edit it on B (B is now the later edit). Turn the network back on in either order — whichever device reconnects first no longer decides. Both devices and Firestore converge on **B's title**, because B's edit is newest. Swap the edit order and A wins instead.
 
 ## Screenshots
 
@@ -91,7 +110,9 @@ Last-write-wins, **dirty local wins**: pull does not overwrite `.pending` or `.f
 
 - Shared demo board, no Auth, open rules.
 - No undo after delete, no conflict glyph, no cross-column drag.
-- Second device that already seeded will not pull until the app is deleted.
+- Last-write-wins compares **device wall clocks**; a device with a badly skewed clock wins or loses unfairly. Server-assigned timestamps or vector clocks would fix this.
+- Conflict resolution is whole-task: two devices editing *different fields* of the same task still resolve to the newer edit, not a field merge.
+- Server deletes are hard deletes, so there is no timestamp left to compare against: a not-yet-synced edit resurrects a concurrently deleted task even when the delete was newer. Server-side tombstone documents would close this edge.
 - UI tests hit the real board and leave extra cards on that simulator.
 
 ## Time and AI
