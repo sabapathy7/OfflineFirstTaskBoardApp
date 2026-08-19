@@ -20,6 +20,7 @@ private enum EditorRoute: Identifiable {
 }
 
 struct BoardView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel: BoardViewModel
     @State private var editor: EditorRoute?
     @State private var selectedColumn = TaskStatus.todo
@@ -31,8 +32,9 @@ struct BoardView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Sync is automatic; the banner is status plus a manual retry.
                 SyncBanner(
-                    title: viewModel.banner.isEmpty ? "Sync Now" : viewModel.banner,
+                    title: viewModel.banner.isEmpty ? "Sync" : viewModel.banner,
                     isFailed: viewModel.banner == "Sync failed",
                     isOffline: viewModel.banner == "Offline"
                 ) {
@@ -48,7 +50,27 @@ struct BoardView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
 
-                column(selectedColumn)
+                BoardColumnView(
+                    status: selectedColumn,
+                    sections: viewModel.sections(in: selectedColumn),
+                    onOpenTask: { editor = .edit($0) },
+                    onDeleteTask: { task in Task { await viewModel.delete(task) } },
+                    onArchiveTask: { task in Task { await viewModel.archive(task) }},
+                    onMoveTask: { task, status in Task { await viewModel.move(task, to: status) } },
+                    onDeleteSubtask: { task, subtask in
+                        Task { await viewModel.deleteSubtask(subtask, of: task) }
+                    },
+                    onMoveSubtask: { task, subtask, status in
+                        Task { await viewModel.moveSubtask(subtask, of: task, to: status) }
+                    },
+                    onToggleSubtaskCompletion: { task, subtask in
+                        Task { await viewModel.toggleSubtaskCompletion(subtask, of: task) }
+                    },
+                    onReorder: { source, dest in
+                        Task { await viewModel.reorder(in: selectedColumn, fromOffsets: source, toOffset: dest) }
+                    },
+                    onRetry: { Task { await viewModel.syncNow() } }
+                )
             }
             .navigationTitle("Board")
             .navigationBarTitleDisplayMode(.inline)
@@ -61,61 +83,41 @@ struct BoardView: View {
                         editor = .create
                     }
                 }
-            }
-            .sheet(item: $editor) { route in
-                EditorSheet(task: {
-                    if case .edit(let task) = route { return task }
-                    return nil
-                }()) { title, detail, status in
-                    switch route {
-                    case .create:
-                        await viewModel.create(title: title, description: detail, status: status)
-                    case .edit(let task):
-                        await viewModel.edit(task, title: title, description: detail, status: status)
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        ArchiveView(
+                            tasks: viewModel.archivedTasks,
+                            onRestore: { task in Task { await viewModel.restore(task) } },
+                            onRetry: { Task { await viewModel.syncNow() } }
+                        )
+                    } label: {
+                        Label("Archive", systemImage: "archivebox")
                     }
                 }
             }
+            .sheet(item: $editor, content: editorSheet)
             .task {
                 await viewModel.load()
+                await viewModel.observeRemoteChanges()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await viewModel.syncNow() }
+                }
             }
         }
     }
 
-    private func column(_ status: TaskStatus) -> some View {
-        List {
-            Section(status.label) {
-                ForEach(viewModel.tasks(in: status)) { task in
-                    Button {
-                        editor = .edit(task)
-                    } label: {
-                        TaskCard(task: task) {
-                            Task { await viewModel.syncNow() }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button("Delete", role: .destructive) {
-                            Task { await viewModel.delete(task) }
-                        }
-                        if let next = status.next {
-                            Button("Move") {
-                                Task { await viewModel.move(task, to: next) }
-                            }
-                            .tint(.blue)
-                        }
-                    }
-                    .swipeActions(edge: .leading) {
-                        if let previous = status.previous {
-                            Button("Back") {
-                                Task { await viewModel.move(task, to: previous) }
-                            }
-                            .tint(.indigo)
-                        }
-                    }
-                }
-                .onMove { source, dest in
-                    Task { await viewModel.reorder(in: status, fromOffsets: source, toOffset: dest) }
-                }
+    private func editorSheet(for route: EditorRoute) -> EditorSheet {
+        EditorSheet(task: {
+            if case .edit(let task) = route { return task }
+            return nil
+        }()) { title, detail, status, subtasks in
+            switch route {
+            case .create:
+                await viewModel.create(title: title, description: detail, status: status, subtasks: subtasks)
+            case .edit(let task):
+                await viewModel.edit(task, title: title, description: detail, status: status, subtasks: subtasks)
             }
         }
     }
