@@ -18,4 +18,6 @@ nonisolated struct TaskItem: Equatable, Sendable, Identifiable {
     var syncStatus: SyncStatus
     var isDeleted: Bool
     var existsOnRemote: Bool
+    var subtasks: [SubtaskItem] = []
+    var isArchived: Bool
 }
